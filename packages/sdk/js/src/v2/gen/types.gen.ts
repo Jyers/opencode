@@ -138,6 +138,7 @@ export type UserMessage = {
     [key: string]: boolean
   }
   variant?: string
+  synthetic?: boolean
 }
 
 export type ProviderAuthError = {

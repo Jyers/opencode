@@ -7376,6 +7376,9 @@
           },
           "variant": {
             "type": "string"
+          },
+          "synthetic": {
+            "type": "boolean"
           }
         },
         "required": ["id", "sessionID", "role", "time", "agent", "model"]

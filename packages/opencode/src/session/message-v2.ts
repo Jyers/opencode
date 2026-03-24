@@ -369,6 +369,7 @@ export namespace MessageV2 {
     system: z.string().optional(),
     tools: z.record(z.string(), z.boolean()).optional(),
     variant: z.string().optional(),
+    synthetic: z.boolean().optional(),
   }).meta({
     ref: "UserMessage",
   })

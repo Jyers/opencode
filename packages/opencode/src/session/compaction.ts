@@ -263,6 +263,7 @@ When constructing the summary, try to stick to this template:
           tools: info.tools,
           system: info.system,
           variant: info.variant,
+          synthetic: true,
         })
         for (const part of first.parts) {
           if (part.type === "compaction") continue
@@ -339,6 +340,7 @@ When constructing the summary, try to stick to this template:
           tools: original.tools,
           system: original.system,
           variant: original.variant,
+          synthetic: true,
         })
         for (const part of replay.parts) {
           if (part.type === "compaction") continue
