@@ -651,10 +651,8 @@ export namespace MessageV2 {
           }
 
           if (part.type === "compaction") {
-            userMessage.parts.push({
-              type: "text",
-              text: "What did we do so far?",
-            })
+            // Compaction is now represented as a compact_context tool call in the
+            // fake assistant message - skip injecting a user question here
           }
           if (part.type === "subtask") {
             userMessage.parts.push({
@@ -668,6 +666,10 @@ export namespace MessageV2 {
       if (msg.info.role === "assistant") {
         const differentModel = `${model.providerID}/${model.id}` !== `${msg.info.providerID}/${msg.info.modelID}`
         const media: Array<{ mime: string; url: string }> = []
+
+        // Skip compaction summary messages — the compacted context is represented
+        // as a compact_context tool call in the fake assistant message instead
+        if (msg.info.summary) continue
 
         if (
           msg.info.error &&

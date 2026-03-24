@@ -194,7 +194,7 @@ describe("session.message-v2.toModelMessage", () => {
     ])
   })
 
-  test("converts user text/file parts and injects compaction/subtask prompts", () => {
+  test("converts user text/file parts and injects subtask prompts, skips compaction part", () => {
     const messageID = "m-user"
 
     const input: MessageV2.WithParts[] = [
@@ -260,9 +260,50 @@ describe("session.message-v2.toModelMessage", () => {
             filename: "img.png",
             data: "https://example.com/img.png",
           },
-          { type: "text", text: "What did we do so far?" },
           { type: "text", text: "The following tool was executed by the user" },
         ],
+      },
+    ])
+  })
+
+  test("skips summary assistant messages (compaction summary hidden from model)", () => {
+    const userID = "m-user"
+    const summaryID = "m-summary"
+
+    const summaryAssistant: MessageV2.Assistant = {
+      ...assistantInfo(summaryID, userID),
+      summary: true,
+      finish: "stop",
+    }
+
+    const input: MessageV2.WithParts[] = [
+      {
+        info: userInfo(userID),
+        parts: [
+          {
+            ...basePart(userID, "u1"),
+            type: "text",
+            text: "do something",
+          },
+        ] as MessageV2.Part[],
+      },
+      {
+        info: summaryAssistant,
+        parts: [
+          {
+            ...basePart(summaryID, "s1"),
+            type: "text",
+            text: "Here is a summary of what we did...",
+          },
+        ] as MessageV2.Part[],
+      },
+    ]
+
+    // Summary assistant messages should be completely excluded from model messages
+    expect(MessageV2.toModelMessages(input, model)).toStrictEqual([
+      {
+        role: "user",
+        content: [{ type: "text", text: "do something" }],
       },
     ])
   })
