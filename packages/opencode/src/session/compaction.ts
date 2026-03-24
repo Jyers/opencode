@@ -245,6 +245,38 @@ When constructing the summary, try to stick to this template:
           .map((p) => (p as MessageV2.TextPart).text)
           .join("") || "[Context was compacted]"
 
+      // Replay the first user message so there is always a user message at the
+      // start of the compacted history (required by most model APIs)
+      const first = input.messages.find(
+        (m) => m.info.role === "user" && !m.parts.some((p) => p.type === "compaction"),
+      )
+      if (first) {
+        const info = first.info as MessageV2.User
+        const initial = await Session.updateMessage({
+          id: MessageID.ascending(),
+          role: "user",
+          sessionID: input.sessionID,
+          time: { created: Date.now() },
+          agent: info.agent,
+          model: info.model,
+          format: info.format,
+          tools: info.tools,
+          system: info.system,
+          variant: info.variant,
+        })
+        for (const part of first.parts) {
+          if (part.type === "compaction") continue
+          await Session.updatePart({
+            ...(part.type === "file" && MessageV2.isMedia(part.mime)
+              ? { type: "text" as const, text: `[Attached ${part.mime}: ${part.filename ?? "file"}]` }
+              : part),
+            id: PartID.ascending(),
+            messageID: initial.id,
+            sessionID: input.sessionID,
+          })
+        }
+      }
+
       // Inject a fake assistant message that "called" compact_context tool so the
       // model sees its context was compacted via a tool result rather than a user message
       const fakeAssistant = (await Session.updateMessage({
