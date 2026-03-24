@@ -15,6 +15,7 @@ import { Plugin } from "@/plugin"
 import { Config } from "@/config/config"
 import { ProviderTransform } from "@/provider/transform"
 import { ModelID, ProviderID } from "@/provider/schema"
+import { ulid } from "ulid"
 
 export namespace SessionCompaction {
   const log = Log.create({ service: "session.compaction" })
@@ -51,7 +52,7 @@ export namespace SessionCompaction {
   export const PRUNE_MINIMUM = 20_000
   export const PRUNE_PROTECT = 40_000
 
-  const PRUNE_PROTECTED_TOOLS = ["skill"]
+  const PRUNE_PROTECTED_TOOLS = ["skill", "compact_context"]
 
   // goes backwards through parts until there are 40_000 tokens worth of tool
   // calls. then erases output of previous tool calls. idea is to throw away old
@@ -236,6 +237,63 @@ When constructing the summary, try to stick to this template:
     }
 
     if (result === "continue" && input.auto) {
+      // Extract summary text from the compaction assistant message
+      const summaryParts = await MessageV2.parts(processor.message.id)
+      const summaryText =
+        summaryParts
+          .filter((p) => p.type === "text")
+          .map((p) => (p as MessageV2.TextPart).text)
+          .join("") || "[Context was compacted]"
+
+      // Inject a fake assistant message that "called" compact_context tool so the
+      // model sees its context was compacted via a tool result rather than a user message
+      const fakeAssistant = (await Session.updateMessage({
+        id: MessageID.ascending(),
+        role: "assistant",
+        parentID: input.parentID,
+        sessionID: input.sessionID,
+        mode: "compaction",
+        agent: userMessage.agent,
+        variant: userMessage.variant,
+        path: {
+          cwd: Instance.directory,
+          root: Instance.worktree,
+        },
+        cost: 0,
+        tokens: {
+          output: 0,
+          input: 0,
+          reasoning: 0,
+          cache: { read: 0, write: 0 },
+        },
+        modelID: model.id,
+        providerID: model.providerID,
+        time: {
+          created: Date.now(),
+        },
+        finish: "tool-calls",
+      })) as MessageV2.Assistant
+
+      await Session.updatePart({
+        id: PartID.ascending(),
+        messageID: fakeAssistant.id,
+        sessionID: input.sessionID,
+        type: "tool",
+        callID: ulid(),
+        tool: "compact_context",
+        state: {
+          status: "completed",
+          input: {},
+          output: summaryText,
+          title: "compact_context",
+          metadata: {},
+          time: {
+            start: Date.now(),
+            end: Date.now(),
+          },
+        },
+      })
+
       if (replay) {
         const original = replay.info as MessageV2.User
         const replayMsg = await Session.updateMessage({
@@ -263,32 +321,6 @@ When constructing the summary, try to stick to this template:
             sessionID: input.sessionID,
           })
         }
-      } else {
-        const continueMsg = await Session.updateMessage({
-          id: MessageID.ascending(),
-          role: "user",
-          sessionID: input.sessionID,
-          time: { created: Date.now() },
-          agent: userMessage.agent,
-          model: userMessage.model,
-        })
-        const text =
-          (input.overflow
-            ? "The previous request exceeded the provider's size limit due to large media attachments. The conversation was compacted and media files were removed from context. If the user was asking about attached images or files, explain that the attachments were too large to process and suggest they try again with smaller or fewer files.\n\n"
-            : "") +
-          "Continue if you have next steps, or stop and ask for clarification if you are unsure how to proceed."
-        await Session.updatePart({
-          id: PartID.ascending(),
-          messageID: continueMsg.id,
-          sessionID: input.sessionID,
-          type: "text",
-          synthetic: true,
-          text,
-          time: {
-            start: Date.now(),
-            end: Date.now(),
-          },
-        })
       }
     }
     if (processor.message.error) return "stop"
