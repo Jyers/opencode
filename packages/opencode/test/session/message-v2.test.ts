@@ -267,6 +267,36 @@ describe("session.message-v2.toModelMessage", () => {
     ])
   })
 
+  test("does not inject compaction prompt when compaction message already contains continuation text", () => {
+    const messageID = "m-user-continuation"
+
+    const input: MessageV2.WithParts[] = [
+      {
+        info: userInfo(messageID),
+        parts: [
+          {
+            ...basePart(messageID, "p1"),
+            type: "compaction",
+            auto: true,
+          },
+          {
+            ...basePart(messageID, "p2"),
+            type: "text",
+            text: "You will be continuing the work of a previous agent.",
+            synthetic: true,
+          },
+        ] as MessageV2.Part[],
+      },
+    ]
+
+    expect(MessageV2.toModelMessages(input, model)).toStrictEqual([
+      {
+        role: "user",
+        content: [{ type: "text", text: "You will be continuing the work of a previous agent." }],
+      },
+    ])
+  })
+
   test("converts assistant tool completion into tool-call + tool-result messages with attachments", () => {
     const userID = "m-user"
     const assistantID = "m-assistant"

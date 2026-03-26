@@ -312,7 +312,12 @@ export namespace SessionPrompt {
         if (!lastFinished && msg.info.role === "assistant" && msg.info.finish)
           lastFinished = msg.info as MessageV2.Assistant
         if (lastUser && lastFinished) break
-        const task = msg.parts.filter((part) => part.type === "compaction" || part.type === "subtask")
+        const hasTextPart = msg.parts.some((part) => part.type === "text")
+        const task = msg.parts.filter(
+          (part) =>
+            part.type === "subtask" ||
+            (part.type === "compaction" && !hasTextPart),
+        )
         if (task && !lastFinished) {
           tasks.push(...task)
         }

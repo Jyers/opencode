@@ -650,7 +650,7 @@ export namespace MessageV2 {
             }
           }
 
-          if (part.type === "compaction") {
+          if (part.type === "compaction" && !msg.parts.some((p) => p.type === "text")) {
             userMessage.parts.push({
               type: "text",
               text: "What did we do so far?",
@@ -881,17 +881,14 @@ export namespace MessageV2 {
 
   export async function filterCompacted(stream: AsyncIterable<MessageV2.WithParts>) {
     const result = [] as MessageV2.WithParts[]
-    const completed = new Set<string>()
     for await (const msg of stream) {
       result.push(msg)
       if (
         msg.info.role === "user" &&
-        completed.has(msg.info.id) &&
-        msg.parts.some((part) => part.type === "compaction")
+        msg.parts.some((part) => part.type === "compaction") &&
+        msg.parts.some((part) => part.type === "text")
       )
         break
-      if (msg.info.role === "assistant" && msg.info.summary && msg.info.finish && !msg.info.error)
-        completed.add(msg.info.parentID)
     }
     result.reverse()
     return result
