@@ -15,6 +15,7 @@ import { Plugin } from "@/plugin"
 import { Config } from "@/config/config"
 import { ProviderTransform } from "@/provider/transform"
 import { ModelID, ProviderID } from "@/provider/schema"
+import type { ModelMessage } from "ai"
 
 export namespace SessionCompaction {
   const log = Log.create({ service: "session.compaction" })
@@ -55,6 +56,42 @@ export namespace SessionCompaction {
     )
 
     return sections.join("\n\n")
+  }
+
+  export function append(input: { msgs: ModelMessage[]; text: string }) {
+    const part = {
+      type: "text" as const,
+      text: input.text,
+    }
+    const tail = input.msgs.at(-1)
+    if (!tail || tail.role !== "user") {
+      return [
+        ...input.msgs,
+        {
+          role: "user" as const,
+          content: [part],
+        },
+      ]
+    }
+    if (typeof tail.content === "string") {
+      return [
+        ...input.msgs.slice(0, -1),
+        {
+          ...tail,
+          content: tail.content ? [{ type: "text" as const, text: tail.content }, part] : [part],
+        },
+      ]
+    }
+    if (Array.isArray(tail.content)) {
+      return [
+        ...input.msgs.slice(0, -1),
+        {
+          ...tail,
+          content: [...tail.content, part],
+        },
+      ]
+    }
+    return input.msgs
   }
 
   export const Event = {
@@ -257,18 +294,10 @@ When constructing the summary, try to stick to this template:
       sessionID: input.sessionID,
       tools: {},
       system: [],
-      messages: [
-        ...MessageV2.toModelMessages(msgs, model, { stripMedia: true }),
-        {
-          role: "user",
-          content: [
-            {
-              type: "text",
-              text: promptText,
-            },
-          ],
-        },
-      ],
+      messages: append({
+        msgs: MessageV2.toModelMessages(msgs, model, { stripMedia: true }),
+        text: promptText,
+      }),
       model,
     })
 

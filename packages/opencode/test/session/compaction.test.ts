@@ -7,6 +7,7 @@ import { Log } from "../../src/util/log"
 import { tmpdir } from "../fixture/fixture"
 import { Session } from "../../src/session"
 import type { Provider } from "../../src/provider/provider"
+import type { ModelMessage } from "ai"
 
 Log.init({ print: false })
 
@@ -224,6 +225,47 @@ describe("session.compaction.isOverflow", () => {
         expect(await SessionCompaction.isOverflow({ tokens, model })).toBe(false)
       },
     })
+  })
+})
+
+describe("session.compaction.append", () => {
+  test("merges prompt into trailing user message", () => {
+    const msgs: ModelMessage[] = [
+      {
+        role: "user",
+        content: [{ type: "text", text: "previous" }],
+      },
+    ]
+
+    expect(SessionCompaction.append({ msgs, text: "next" })).toStrictEqual([
+      {
+        role: "user",
+        content: [
+          { type: "text", text: "previous" },
+          { type: "text", text: "next" },
+        ],
+      },
+    ])
+  })
+
+  test("appends a new user message when history does not end with user", () => {
+    const msgs: ModelMessage[] = [
+      {
+        role: "assistant",
+        content: [{ type: "text", text: "done" }],
+      },
+    ]
+
+    expect(SessionCompaction.append({ msgs, text: "continue" })).toStrictEqual([
+      {
+        role: "assistant",
+        content: [{ type: "text", text: "done" }],
+      },
+      {
+        role: "user",
+        content: [{ type: "text", text: "continue" }],
+      },
+    ])
   })
 })
 
